@@ -1,0 +1,86 @@
+// Shared Renovate config for the openweft org.
+// Each repo extends this via :
+//   { "extends": ["github>openweft/.github:renovate-default"] }
+//
+// Lives in `openweft/.github` so all repos share one source of truth.
+// Editing this file propagates to every repo on its next Renovate run.
+
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Base : config:recommended bundles lockFileMaintenance, pin-friendly
+  // defaults, semantic-commit messages, dependency dashboard, and the
+  // standard manager set (gomod, github-actions, dockerfile, npm, etc.).
+  extends: ["config:recommended"],
+
+  // Quiet weekend schedule : Monday early AM Europe-time, picks up the
+  // weekend's upstream releases without inboxing PRs during the work
+  // week. Adjust per-repo via override if a project needs faster cadence.
+  schedule: ["before 5am on monday"],
+
+  // Cap noise. Updates queue rather than firing all at once.
+  prHourlyLimit: 4,
+  prConcurrentLimit: 10,
+
+  // Surface Renovate's planned work without firing every PR : the
+  // dashboard issue stays open in the repo with a checklist of pending
+  // updates ; the operator ticks boxes to allow PRs through.
+  dependencyDashboard: true,
+  dependencyDashboardTitle: "Renovate Dashboard",
+
+  // Auto-merge devDeps + minor go.sum bumps after CI passes — these
+  // are the bumps an operator would always accept anyway. Major
+  // bumps + main-source deps still require explicit human review.
+  packageRules: [
+    {
+      // Group go module patch + minor bumps under one PR per week so
+      // we don't get N separate PRs for transitive dep churn.
+      matchManagers: ["gomod"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      groupName: "go modules (minor + patch)",
+    },
+    {
+      // Major go module bumps : one PR per package so the diff stays
+      // reviewable and a breaking change in one dep doesn't block ten
+      // others from landing.
+      matchManagers: ["gomod"],
+      matchUpdateTypes: ["major"],
+      groupName: null,
+      labels: ["dependencies", "major"],
+    },
+    {
+      // GitHub Actions : group them — they're trivial bumps usually.
+      matchManagers: ["github-actions"],
+      groupName: "github actions",
+    },
+    {
+      // Dockerfile FROM lines : group base-image bumps so OCI builds
+      // pick up the patched distroless / alpine in one shot.
+      matchManagers: ["dockerfile"],
+      groupName: "dockerfile base images",
+    },
+    {
+      // Frontend deps (webui) : grouped to avoid 50 individual PRs.
+      matchManagers: ["npm"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "npm (minor + patch)",
+    },
+  ],
+
+  // Go-specific : Renovate's gomod manager defaults are fine but we
+  // explicitly enable postUpdateOptions so go.sum stays clean and we
+  // pick up indirect-dep bumps consistently.
+  postUpdateOptions: [
+    "gomodTidy",
+  ],
+
+  // Vulnerability alerts get their own fast lane — bypass the schedule
+  // and the prHourlyLimit. Security comes first.
+  vulnerabilityAlerts: {
+    enabled: true,
+    labels: ["security"],
+    schedule: ["at any time"],
+    prHourlyLimit: 0,
+    prConcurrentLimit: 0,
+  },
+}
