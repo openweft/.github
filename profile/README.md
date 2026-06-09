@@ -66,7 +66,7 @@ Experimental or in-progress : multi-driver agents on a single host (HCL + schedu
 - [weft-network-proto](https://github.com/openweft/weft-network-proto) · networking control-plane gRPC contract
 - [weft-drivers](https://github.com/openweft/weft-drivers) · Hypervisor / Network / Volume / Image driver interfaces
 - [weft-driver-plugin](https://github.com/openweft/weft-driver-plugin) · go-plugin protocol between `weft-agent` and driver binaries
-- [weft-hcl](https://github.com/openweft/weft-hcl) · shared HCL parser (`cluster.hcl`, infra plans, …) — renamed from `hclconfig`
+- [weft-hcl](https://github.com/openweft/weft-hcl) · shared HCL parser (`cluster.hcl`, infra plans, …) ; Go package `wefthcl`
 - [weft-cidata](https://github.com/openweft/weft-cidata) · pure-Go NoCloud cloud-init seed builder for classic VMs — renamed from `cloud-init`
 - [weft-firstboot](https://github.com/openweft/weft-firstboot) · cloud-init-lite v0.2 first-boot agent for classic VMs (linux + openbsd + freebsd + netbsd, amd64 + arm64)
 
