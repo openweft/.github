@@ -37,7 +37,8 @@
       "groupName": "npm (minor + patch)"
     }
   ],
-  "postUpdateOptions": ["gomodTidy"],
+  "_comment_postUpdateOptions": "gomodVendor matters for the seven repos here that build with -mod=vendor (weft, weft-microvm, weft-microvm-agent, weft-network, weft-webui, weft-ha-postgresql, terraform-provider-weft). Without it Renovate edits go.mod and leaves vendor/ untouched, so the branch cannot build at all -- `go build -mod=vendor` fails on the go.mod parse before it compiles anything -- and Renovate's own renovate/artifacts check reports 'Artifact file update failure'. Harmless for the other repos: with no vendor/ directory there is nothing to vendor.",
+  "postUpdateOptions": ["gomodTidy", "gomodVendor"],
   "vulnerabilityAlerts": {
     "enabled": true,
     "labels": ["security"],
