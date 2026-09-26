@@ -1,0 +1,52 @@
+# Every repository this profile names has to exist.
+#
+# ⛔ This repository had NO workflow at all, so a change to the profile arrived
+# with zero checks — and ghmerge refuses that, correctly: nothing failing is not
+# everything passing. A profile is a page of promises about other repositories,
+# and the cheapest promise to break is a link to one that was renamed, moved or
+# deleted. openweft/.github lists 54 of them.
+#
+# The check is deliberately narrow. It does not ask whether the DESCRIPTION is
+# still true — no workflow can — only whether the thing pointed at is there.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: every repository the profile names exists
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: resolve each link
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          grep -ohE 'https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+' profile/README.md \
+            | sed 's|https://github.com/||' | sort -u > links.txt
+          echo "links: $(wc -l < links.txt)"
+          # ⛔ A run that resolved nothing must not pass. An empty list means the
+          # profile changed shape and this check stopped looking, which reads
+          # exactly like a profile with no broken links.
+          if [ ! -s links.txt ]; then
+            echo "::error::no repository links were found in profile/README.md — the check is not looking at anything"
+            exit 1
+          fi
+          bad=0
+          while read -r slug; do
+            if ! gh api "repos/$slug" --jq .id >/dev/null 2>&1; then
+              echo "::error::profile/README.md links to $slug, which does not resolve"
+              bad=$((bad+1))
+            fi
+          done < links.txt
+          echo "unresolvable: $bad"
+          [ "$bad" -eq 0 ]

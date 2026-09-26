@@ -71,6 +71,8 @@ Experimental or in-progress : multi-driver agents on a single host (HCL + schedu
 - [weft-hcl](https://github.com/openweft/weft-hcl) · shared HCL parser (`cluster.hcl`, infra plans, …) ; Go package `wefthcl`
 - [weft-cidata](https://github.com/openweft/weft-cidata) · pure-Go NoCloud cloud-init seed builder for classic VMs — renamed from `cloud-init`
 - [weft-firstboot](https://github.com/openweft/weft-firstboot) · cloud-init-lite v0.2 first-boot agent for classic VMs (linux + openbsd + freebsd + netbsd, amd64 + arm64)
+- [weft-tui](https://github.com/openweft/weft-tui) · terminal UI for the cluster orchestrator — a single binary that connects to a running weft
+- [weft-chaos](https://github.com/openweft/weft-chaos) · stress and chaos harness for openweft clusters
 
 ### Hypervisor drivers (go-plugin binaries, pulled OCI)
 - [weft-driver-vz](https://github.com/openweft/weft-driver-vz) · Apple Virtualization framework (darwin, cgo, entitled)
@@ -78,6 +80,7 @@ Experimental or in-progress : multi-driver agents on a single host (HCL + schedu
 - [weft-driver-vmd](https://github.com/openweft/weft-driver-vmd) · OpenBSD `vmd(8)` / `vmctl(8)`
 - [weft-driver-dcs](https://github.com/openweft/weft-driver-dcs) · Huawei FusionCompute (VRM, REST upstream, gRPC downstream)
 - [weft-drivers](https://github.com/openweft/weft-drivers) · driver interface module shared by the four backends
+- [weft-driver-wasm](https://github.com/openweft/weft-driver-wasm) · WASM hypervisor driver — pure-Go (wazero), any arch, any host
 
 ### microVM stack
 - [weft-microvm](https://github.com/openweft/weft-microvm) · host-side runtime (OCI pull, virtio-fs / 9p rootfs, image cache)
@@ -88,6 +91,9 @@ Experimental or in-progress : multi-driver agents on a single host (HCL + schedu
 
 ### Storage
 - [weft-block](https://github.com/openweft/weft-block) · single-attach block volumes — `longhorn-engine` fork (Apache 2.0 upstream), Weft-native control plane, NBD frontend, pure-Go `qcow2`. Linux/arm64 `CGO=0`.
+- [weft-nbd](https://github.com/openweft/weft-nbd) · pure-Go NBD server and client library
+- [weft-ha-block](https://github.com/openweft/weft-ha-block) · the weft binding for [go-volumes](https://github.com/go-volumes) replicated-volume high availability — the integrator that plugs weft into it
+- [weft-volume-backup](https://github.com/openweft/weft-volume-backup) · the POLICY layer over go-volumes: automated OCI snapshots and retention
 
 ### Network
 - [weft-network](https://github.com/openweft/weft-network) · network controller (Routers, LBs, DNS zones, scheduling rules) — 16/16 RPCs, etcd-backed, multi-arch release
@@ -108,6 +114,10 @@ Experimental or in-progress : multi-driver agents on a single host (HCL + schedu
 - [weft-loom-texlive](https://github.com/openweft/weft-loom-texlive) · TeX Live full + latexmk + biber compile image
 - [weft-loom-golang](https://github.com/openweft/weft-loom-golang), [weft-loom-cpp](https://github.com/openweft/weft-loom-cpp), [weft-loom-python](https://github.com/openweft/weft-loom-python), [weft-loom-rust](https://github.com/openweft/weft-loom-rust), [weft-loom-node](https://github.com/openweft/weft-loom-node) · per-language compile images
 - [weft-loom-app-osx](https://github.com/openweft/weft-loom-app-osx), [weft-loom-app-linux](https://github.com/openweft/weft-loom-app-linux), [weft-loom-app-windows](https://github.com/openweft/weft-loom-app-windows) · loom desktop shells (fork of `weft-app-*` with loom branding)
+- [weft-loom-workspace](https://github.com/openweft/weft-loom-workspace) · the rootfs every weft-loom user's microVM boots into
+- [weft-loom-gotex](https://github.com/openweft/weft-loom-gotex) · pure-Go from-scratch LaTeX compile sandbox — a drop-in alternative to weft-loom-texlive, selected at runtime
+- [weft-loom-markdown](https://github.com/openweft/weft-loom-markdown) · Markdown compile sandbox image
+- [weft-loom-themes](https://github.com/openweft/weft-loom-themes) · shared institutional brand themes (Marp / Pandoc / LaTeX) for the compile tooling, with one repository per institution: [cnrs](https://github.com/openweft/weft-loom-theme-cnrs), [dinum](https://github.com/openweft/weft-loom-theme-dinum), [ihes](https://github.com/openweft/weft-loom-theme-ihes), [ip-paris](https://github.com/openweft/weft-loom-theme-ip-paris), [paris-saclay](https://github.com/openweft/weft-loom-theme-paris-saclay), [polytechnique](https://github.com/openweft/weft-loom-theme-polytechnique)
 
 ### HA platform plugins
 - [weft-ha-postgresql](https://github.com/openweft/weft-ha-postgresql) · etcd DCS + VMFencer (StopVM gRPC) + reconcile state machine
