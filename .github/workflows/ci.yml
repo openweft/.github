@@ -50,3 +50,367 @@ jobs:
           done < links.txt
           echo "unresolvable: $bad"
           [ "$bad" -eq 0 ]
+
+  # ⛔ Added because this repository holds the Renovate PRESET every repository
+  # in this organisation extends, and nothing checked it. A broken default.json
+  # does not break this repository: it stops Renovate EVERYWHERE, and the
+  # symptom is silence.
+  #
+  # Copied verbatim from the 120 organisations that already carry it, NOT
+  # rewritten. It knows four things a fresh attempt does not -- see the step
+  # comments: config.js must validate standalone, the inherited path is a
+  # stricter validator, a top-level extends is never resolved, and the
+  # self-tests prove the checks can still fail.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # 1. PROVES: every workflow file is a parseable GitHub Actions workflow
+      #    with well-formed expressions and no unknown keys.
+      #    DOES NOT PROVE: that any action it references exists or works.
+      - name: Workflows parse
+        run: |
+          curl -sSfL -o actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          tar xzf actionlint.tar.gz actionlint
+          ./actionlint .github/workflows/*.yml
+
+      # 2. PROVES: every `uses: owner/repo@ref` in every workflow resolves to a
+      #    ref that exists in that repository today. This is the step with
+      #    teeth on the pull requests that actually arrive here, which bump
+      #    renovatebot/github-action and nothing else.
+      #    DOES NOT PROVE: that the new version behaves. See the note at the
+      #    foot of this file about what the action actually pins.
+      #    Uses `git ls-remote`, so it needs no token and has no API budget.
+      - name: Every pinned action ref exists
+        run: |
+          set -euo pipefail
+          rc=0
+          # No pipe into `while`: that is a subshell, rc=1 set inside it is
+          # discarded, and the step passes whatever it found. A check that
+          # cannot fail is the thing this whole file exists to stop.
+          # Anchored to the start of a line, after optional indent and an
+          # optional list dash. Unanchored, this matched the example `uses:`
+          # written inside a comment in this very file and reported it missing.
+          refs=$(grep -hoE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*[A-Za-z0-9._-]+/[A-Za-z0-9._-]+@[A-Za-z0-9._/-]+' \
+                   .github/workflows/*.yml \
+                 | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*//' | sort -u)
+          [ -n "$refs" ] || { echo "no pinned action refs found -- grep is wrong"; exit 1; }
+          while read -r ref; do
+              repo="${ref%@*}"; rev="${ref##*@}"
+              if git ls-remote --refs "https://github.com/$repo" \
+                   "refs/tags/$rev" "refs/heads/$rev" | grep -q .; then
+                echo "ok       $ref"
+              elif [ "${#rev}" -eq 40 ] && \
+                   git ls-remote "https://github.com/$repo" | grep -q "^$rev"; then
+                echo "ok(sha)  $ref"
+              else
+                echo "MISSING  $ref -- no such tag, branch or sha"; rc=1
+              fi
+          done <<< "$refs"
+          exit $rc
+
+      # 3. PROVES: the Renovate configuration this organisation runs on holds no
+      #    unknown option, is well-formed, and -- for config.js -- evaluates
+      #    STANDALONE.
+      #
+      #    Standalone matters and is not pedantry. renovatebot/github-action
+      #    mounts the configuration file BY ITSELF (src/renovate.ts, v46.2.5):
+      #
+      #        --volume ${configurationFile.value}:/github-action/<basename>
+      #
+      #    so a `require('./sibling')` resolves in the checkout, passes a
+      #    validator run there, and still kills every scheduled run with
+      #    "FATAL: Error parsing config file" -- a message naming no path,
+      #    reading like a syntax error in a file that has none.
+      #
+      #    DOES NOT PROVE -- both measured against renovate@latest, not
+      #    inferred from the documentation:
+      #
+      #      - that a TOP-LEVEL `extends:` resolves. Renovate DOES resolve a
+      #        preset nested inside a packageRules[] entry, over the network,
+      #        and a bad one there fails correctly. A top-level one is not
+      #        resolved at all: a config whose top-level extends is
+      #        `github>no-such-org-xyz99/nope` validates and exits 0. Every
+      #        config in this organisation extends at the top level. Step 5
+      #        exists for that case, and only that case.
+      #
+      #      - `matchUpdateTypes`. Most types ARE checked: a string for
+      #        `automerge` (boolean), for `prConcurrentLimit` (integer), or an
+      #        object for `packageRules` (array) each fail correctly. But
+      #        `"matchUpdateTypes": "minor"` where an array is required
+      #        validates and exits 0, with or without --strict and --no-global.
+      #        Nothing here catches that one.
+      - name: Renovate config validates, as the container sees it
+        run: |
+          set -euo pipefail
+          iso="$(mktemp -d)"
+          global=() repo=()
+          # `if` blocks, not `[ -f x ] && ...`: under `set -e` a false test is
+          # a failed statement and aborts the step.
+          if [ -f config.js ]; then cp config.js "$iso/"; global+=(config.js); fi
+          # ⛔ NOT a fixed list of two names. A repository extends a
+          # sub-preset by file name -- openweft's repositories all say
+          #
+          #     "extends": ["github>openweft/.github:renovate-default"]
+          #
+          # which loads renovate-default.json, a name the old list did not
+          # hold. Installing this workflow here with `for f in default.json
+          # renovate.json` gave a validate step that validated NOTHING and
+          # reported success: the alibi this file's own header warns about.
+          # Every root .json is a Renovate config in a .github repository,
+          # except the two npm ones.
+          for f in ./*.json; do
+            f="${f#./}"
+            case "$f" in package.json|package-lock.json|'*.json') continue ;; esac
+            cp "$f" "$iso/"; repo+=("$f")
+          done
+          cd "$iso"
+          # config.js is self-hosted (global) config; default.json and
+          # renovate.json are repo config. Passing a filename makes the
+          # validator assume GLOBAL unless --no-global is given -- its own
+          # --help warns about this -- so the two kinds are validated
+          # separately, each in the mode Renovate will actually read it in.
+          if [ ${#global[@]} -gt 0 ]; then
+            npx --yes --package renovate@latest renovate-config-validator --strict "${global[@]}"
+          fi
+          if [ ${#repo[@]} -gt 0 ]; then
+            npx --yes --package renovate@latest renovate-config-validator --strict --no-global "${repo[@]}"
+          fi
+          if [ ${#global[@]} -eq 0 ] && [ ${#repo[@]} -eq 0 ]; then
+            echo "no Renovate config in this repository -- nothing validated"; exit 1
+          fi
+
+      # 4. PROVES: step 3 can still fail. A check whose subject silently stops
+      #    being checked is worse than no check, because it turns an absence
+      #    into assurance. If a future validator, or a future --strict, stops
+      #    rejecting an unknown option, this fails here rather than going quiet.
+      - name: The validator still rejects a bad config
+        run: |
+          set -euo pipefail
+          bad="$(mktemp -d)"
+          printf '{"thisOptionDoesNotExist": true}\n' > "$bad/renovate.json"
+          cd "$bad"
+          if npx --yes --package renovate@latest renovate-config-validator \
+               --strict --no-global renovate.json; then
+            echo "SELF-TEST FAILED: the validator accepted an unknown option."
+            echo "Step 3 above therefore proves nothing. Fix this before trusting it."
+            exit 1
+          fi
+          echo "self-test ok: the validator rejects what it should"
+
+      # 4b. PROVES: this preset survives the INHERITED path, which is a
+      #     different validator from step 3 and stricter.
+      #
+      #     config.js sets inheritConfig, so Renovate reads default.json
+      #     through validateConfig('inherit', ...) -- and that runs WITHOUT
+      #     the migration applied to a preset. A plain string `description`
+      #     is legal in a preset, migrated to a list, and REJECTED when
+      #     inherited:
+      #
+      #       Configuration option `description` should be a list (Array)
+      #       Configuration option `packageRules[0].description` should be a
+      #       list (Array)
+      #
+      #     Renovate then opens "Action Required: Fix Renovate Configuration"
+      #     on EVERY repository in the organisation and stops producing
+      #     updates there. On 2026-09-03 that landed on all 117 organisations
+      #     at once, and step 3 above passed the whole time, because it
+      #     validates default.json as REPO config -- the shape Renovate no
+      #     longer reads it in.
+      #
+      #     The failure is silent twice over: the Renovate workflow run still
+      #     reports success, since a per-repository config error is an issue
+      #     rather than a failed job.
+      #
+      #     DOES NOT PROVE: that nothing else differs between the two
+      #     validators. This checks the one rule that has actually bitten.
+      #     If another surfaces, add it here rather than to a person's memory.
+      - name: The preset survives the inherited path
+        run: |
+          set -euo pipefail
+          # ⛔ This check has a PREMISE, and it must not fire where the
+          # premise does not hold. A string `description` is legal in a
+          # PRESET -- Renovate migrates it to a list -- and fatal only on the
+          # INHERITED path, which exists when config.js sets inheritConfig.
+          # This organisation has no config.js, so its preset is read as a
+          # preset and its string descriptions are correct. Asserting
+          # otherwise here would be a guard failing on a healthy repository,
+          # which teaches people to ignore the lane.
+          if [ ! -f config.js ] || ! grep -q 'inheritConfig' config.js; then
+            echo "no inheritConfig in this organisation -- the preset path applies,"
+            echo "where a string description is legal. Nothing to check."
+            exit 0
+          fi
+          # Same reason as step 3: the preset is not always called
+          # default.json. openweft's is renovate-default.json, and a fixed
+          # name made this step exit 0 without looking at it.
+          shopt -s nullglob
+          presets=()
+          for f in ./*.json; do
+            f="${f#./}"
+            case "$f" in package.json|package-lock.json) continue ;; esac
+            presets+=("$f")
+          done
+          [ ${#presets[@]} -gt 0 ] || { echo "no Renovate config here -- nothing to check"; exit 0; }
+          python3 - "${presets[@]}" <<'CHECK'
+          import json, sys
+          bad = []
+          for path in sys.argv[1:]:
+              d = json.load(open(path))
+              if isinstance(d.get("description"), str):
+                  bad.append("%s: description" % path)
+              for i, r in enumerate(d.get("packageRules") or []):
+                  if isinstance(r.get("description"), str):
+                      bad.append("%s: packageRules[%d].description" % (path, i))
+          if bad:
+              print("REJECTED on the inherited path:")
+              for b in bad:
+                  print("  %s is a string; it must be a list (Array)" % b)
+              print("A string is fine in a preset and fatal when inherited.")
+              sys.exit(1)
+          print("ok: every description is a list")
+          CHECK
+
+      # 4c. PROVES: step 4b can still fail, on a config shaped exactly like
+      #     the one that caused the outage.
+      - name: The inherited-path check still rejects a string description
+        run: |
+          set -euo pipefail
+          bad="$(mktemp -d)"
+          printf '{"packageRules":[{"description":"a string","matchUpdateTypes":["minor"]}]}\n' \
+            > "$bad/default.json"
+          if python3 - "$bad/default.json" <<'CHECK'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          if isinstance(d.get("description"), str):
+              sys.exit(1)
+          for r in d.get("packageRules") or []:
+              if isinstance(r.get("description"), str):
+                  sys.exit(1)
+          sys.exit(0)
+          CHECK
+          then
+            echo "SELF-TEST FAILED: a string description was accepted."
+            echo "Step 4b therefore proves nothing. Fix this before trusting it."
+            exit 1
+          fi
+          echo "self-test ok: a string description is still rejected"
+
+      # 5. PROVES: every preset named in a TOP-LEVEL `extends` exists and is
+      #    parseable JSON -- the one case the validator provably skips
+      #    (measured, step 3). Every repository in the fleet carries
+      #    `"extends": ["github>ORG/.github"]` at the top level, so a renamed
+      #    or emptied preset repository silently drops every repository that
+      #    points at it back to Renovate's defaults, with every run still
+      #    green.
+      #
+      #    A preset naming THE REPOSITORY THIS IS RUNNING IN is resolved from
+      #    the CHECKOUT, and that is not a convenience. This step used to fetch
+      #    every preset from raw.githubusercontent.com/<slug>/HEAD, which is
+      #    the PUBLISHED copy -- so when the pull request under test IS the
+      #    preset repository, it asked about a version of the file that the
+      #    pull request has not created yet. On the first landing in a new
+      #    organisation, `github>ORG/.github` therefore reported MISSING while
+      #    `default.json` sat right there in the tree, added by the very commit
+      #    being checked. go-gitsafe/.github#1 is that failure. The published
+      #    copy is simply the wrong source for a repository the checkout
+      #    already holds authoritatively.
+      #
+      #    Do NOT "simplify" this back to one remote fetch. It is not two code
+      #    paths for the sake of it: for THIS repository the tree is the truth
+      #    and `main` is stale by exactly the change under review, and for every
+      #    OTHER repository the tree knows nothing and the published copy is
+      #    the only truth there is.
+      #
+      #    The failure stays sharp. Absent from the tree AND absent from the
+      #    remote is still MISSING, which is the renamed-preset case this step
+      #    exists to catch. Only "present in one of them" passes.
+      #
+      #    One trap the tree path has and the remote path did not. Every
+      #    `<org>/.github` holds BOTH the preset (`default.json`) and the stub
+      #    that consumes it (`renovate.json`, `{"extends": ["github>ORG/.github"]}`).
+      #    Renovate falls back from the first to the second, so a tree that has
+      #    lost `default.json` would resolve the preset to the stub that names
+      #    it -- a file extending itself -- and this step would call that `ok`
+      #    while Renovate chokes on the recursion. So a candidate whose own
+      #    top-level `extends` names THIS repository is skipped rather than
+      #    accepted: it is the consumer, not the preset.
+      #
+      #    DOES NOT PROVE: that the preset's contents are what anyone intended.
+      #    Presets nested in packageRules are left to the validator, which
+      #    already resolves those and does it better.
+      - name: Every `extends` preset resolves
+        run: |
+          set -euo pipefail
+          rc=0
+          refs=$(grep -hoE '"github>[^"]+"' ./*.json 2>/dev/null | tr -d '"' | sort -u || true)
+          if [ -z "$refs" ]; then echo "no github> presets to resolve"; exit 0; fi
+          # Slugs are case-insensitive on GitHub; compare them that way.
+          self=$(printf '%s' "${GITHUB_REPOSITORY:-}" | tr '[:upper:]' '[:lower:]')
+          # The order Renovate itself looks for a preset file in.
+          candidates="default.json renovate.json .renovaterc.json .renovaterc .github/renovate.json"
+          while read -r p; do
+            slug="${p#github>}"; slug="${slug%%:*}"
+            found=""
+            if [ -n "$self" ] && \
+               [ "$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]')" = "$self" ]; then
+              for f in $candidates; do
+                if [ -f "$f" ]; then
+                  # The stub that consumes the preset is not the preset.
+                  circular="import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if any(isinstance(x,str) and x.split(':')[0].lower()=='github>'+sys.argv[2] for x in (d.get('extends') or [])) else 1)"
+                  if python3 -c "$circular" "$f" "$self" 2>/dev/null; then
+                    echo "skip     ./$f extends $p itself -- it is the consumer, not the preset"
+                    continue
+                  fi
+                  if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f"; then
+                    echo "ok(tree) $p -> ./$f -- this repository, as this pull request leaves it"
+                  else
+                    echo "BAD JSON $p -> ./$f -- this repository, as this pull request leaves it"
+                    rc=1
+                  fi
+                  found=1; break
+                fi
+              done
+              [ -n "$found" ] || \
+                echo "note     $p names this repository but the checkout has no preset file; asking the published copy"
+            fi
+            if [ -z "$found" ]; then
+              for f in $candidates; do
+                if curl -sSfL -o /tmp/preset.json \
+                     "https://raw.githubusercontent.com/$slug/HEAD/$f"; then
+                  if python3 -c "import json;json.load(open('/tmp/preset.json'))"; then
+                    echo "ok       $p -> $slug/$f"
+                  else
+                    echo "BAD JSON $p -> $slug/$f"; rc=1
+                  fi
+                  found=1; break
+                fi
+              done
+            fi
+            if [ -z "$found" ]; then
+              echo "MISSING  $p -- not in this checkout and no preset file in $slug"
+              rc=1
+            fi
+          done <<< "$refs"
+          exit $rc
+
+# One thing none of this can prove, worth writing down where it will be read.
+#
+# `renovatebot/github-action` does not pin the Renovate it runs. src/docker.ts
+# (v46.2.5) hardcodes:
+#
+#     image   = 'ghcr.io/renovatebot/renovate'
+#     version = '44'
+#
+# so the container is ghcr.io/renovatebot/renovate:44 -- a FLOATING major tag.
+# The engine therefore changes under this organisation on days when nothing in
+# this repository changed, and Renovate never opens a pull request for it
+# because there is no pin to bump. v46.2.4 and v46.2.5 both say '44': the
+# action bump these pull requests carry moves the runner's wrapper, not its
+# engine. Pinning that image by digest is a separate decision, not this file's.
