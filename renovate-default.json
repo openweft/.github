@@ -64,6 +64,18 @@
         "patch"
       ],
       "groupName": "npm (minor + patch)"
+    },
+    {
+      "description": "Never auto-merge the Go toolchain, and never let it ride in a group: a go directive bump is a reviewed decision of its own (go1.27.0/1.27.1 miscompile on loong64, golang/go#81000).",
+      "matchManagers": [
+        "gomod",
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
+      "automerge": false,
+      "groupName": null
     }
   ],
   "postUpdateOptions": [
