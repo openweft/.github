@@ -16,7 +16,7 @@
   "dependencyDashboardTitle": "Renovate Dashboard",
   "packageRules": [
     {
-      "description": "Group go module minor+patch bumps under one PR per week",
+      "description": ["Group go module minor+patch bumps under one PR per week"],
       "matchManagers": [
         "gomod"
       ],
@@ -28,7 +28,7 @@
       "groupName": "go modules (minor + patch)"
     },
     {
-      "description": "Major go module bumps : one PR per package, labeled for review",
+      "description": ["Major go module bumps : one PR per package, labeled for review"],
       "matchManagers": [
         "gomod"
       ],
@@ -41,21 +41,21 @@
       ]
     },
     {
-      "description": "Group github-actions bumps",
+      "description": ["Group github-actions bumps"],
       "matchManagers": [
         "github-actions"
       ],
       "groupName": "github actions"
     },
     {
-      "description": "Group dockerfile base-image bumps",
+      "description": ["Group dockerfile base-image bumps"],
       "matchManagers": [
         "dockerfile"
       ],
       "groupName": "dockerfile base images"
     },
     {
-      "description": "Group npm minor+patch (frontend deps)",
+      "description": ["Group npm minor+patch (frontend deps)"],
       "matchManagers": [
         "npm"
       ],
@@ -66,7 +66,7 @@
       "groupName": "npm (minor + patch)"
     },
     {
-      "description": "Never auto-merge the Go toolchain, and never let it ride in a group: a go directive bump is a reviewed decision of its own (go1.27.0/1.27.1 miscompile on loong64, golang/go#81000).",
+      "description": ["Never auto-merge the Go toolchain, and never let it ride in a group: a go directive bump is a reviewed decision of its own (go1.27.0/1.27.1 miscompile on loong64, golang/go#81000)."],
       "matchManagers": [
         "gomod",
         "github-actions"
