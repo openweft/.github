@@ -1,0 +1,44 @@
+// Renovate for this organisation, and only this one.
+//
+// One organisation is a few repositories, so a run never comes near the five
+// thousand API requests an hour a token has. A shared runner over hundreds of
+// organisations does, and then it walks the list in the same order every time
+// and the tail is never reached — silently, while the head keeps producing
+// pull requests and the whole thing looks like it works. That is why this is
+// here rather than in a fleet-wide runner.
+//
+// The policy lives in renovate-default.json beside this file.
+//
+// Added 2026-10-07: the Renovate App installed on this organisation had opened
+// pull requests in only 3 of its 47 Go repositories, the last on 2026-06-08,
+// while govulncheck found 47 reachable vulnerabilities in five of them.
+module.exports = {
+  platform: 'github',
+  // The account blocks pushes that expose a non-noreply email, and Renovate's
+  // default author is bot@renovateapp.com. Left alone, every branch push is
+  // rejected and the run still reports success.
+  gitAuthor: 'tannevaled <tannevaled@users.noreply.github.com>',
+  autodiscover: true,
+  autodiscoverFilter: ['openweft/**'],
+  onboarding: false,
+  requireConfig: 'optional',
+  dependencyDashboard: true,
+  repositoryCache: 'enabled',
+  // default.json beside this file is a PRESET, and a preset reaches a
+  // repository only through an `extends` that names it. Sitting in the
+  // organisation applies it to nothing: with onboarding:false and
+  // requireConfig:'optional', a repository carrying no config file runs on
+  // Renovate's factory defaults and says so only at debug level --
+  // "No renovate config file found". Measured 2026-09-03: 77 of the 835
+  // repositories across the 117 organisations that run Renovate were in that
+  // state, so the Go toolchain guard in default.json had never been in force
+  // on any of them.
+  inheritConfig: true,
+  inheritConfigRepoName: '{{parentOrg}}/.github',
+  // openweft keeps its own policy file, renovate-default.json (vendoring,
+  // weekly grouping), which the repositories already name in their extends.
+  inheritConfigFileName: 'renovate-default.json',
+  // Loud when absent. Left at its default of false, Renovate proceeds silently
+  // when the file is missing -- the same failure, one level up.
+  inheritConfigStrict: true,
+};
