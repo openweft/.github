@@ -22,7 +22,9 @@ module.exports = {
   autodiscoverFilter: ['openweft/**'],
   onboarding: false,
   requireConfig: 'optional',
-  dependencyDashboard: true,
+  // The object form: the boolean is a deprecated shape that
+  // renovate-config-validator --strict refuses (go-fleettools/fleettools#305).
+  dependencyDashboard: { enabled: true },
   repositoryCache: 'enabled',
   // default.json beside this file is a PRESET, and a preset reaches a
   // repository only through an `extends` that names it. Sitting in the
